@@ -1,57 +1,44 @@
-import express from "express";
-import http from "http";
-import cors from "cors";
-import { Server } from "socket.io";
-import tmi from "tmi.js";
-import errorMiddleware from "./middlewares/errorMiddleware.js";
+const tmi = require("tmi.js");
+const { OpenAI } = require("openai");
+require("dotenv").config();
 
-const app = express();
-const server = http.createServer(app);
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-const io = new Server(server, {
-  cors: {
-    origin: "http://localhost:3000/",
-    methods: ["GET", "POST"],
-    credentials: true,
-    allowedHeaders: ["Content-Type"],
+const basePrompt = `You are an egyptian citizen who speaks day to day arabic and is working as a translator. You're talking to your peers online, so adjust the translation to fit informal egyptian dialect and whenever you spot a word that doesn't fit the arabic sentence structure, keep it as is. Your job is to receive a message with a prefix that indicates the target language in the form of "!" followed by the ISO 639-1 code for the language. For example: !ar for arabic, !en for english, !ru for russian, etc. Translate the phrase after the prefix according to what language the prefix indicated. You can't provide any comment. Return only the translated message. Keep names of people or companies as the original. Do not include the prefix in the response. With that being said, translate the following message: `;
+
+const generateAnswer = async (msg) => {
+  const response = await openai.chat.completions.create({
+    messages: [
+      {
+        role: "user",
+        content: basePrompt + msg,
+      },
+    ],
+    model: "gpt-3.5-turbo",
+  });
+  return response.choices[0].message.content;
+};
+
+const client = new tmi.Client({
+  options: { debug: true },
+  identity: {
+    username: "Cyandullah",
+    password: process.env.TWITCH_CHAT_AUTH_TOKEN,
   },
+  channels: ["violetism"],
 });
 
-let clientSocket;
+client.connect();
 
-app.use(express.json());
-app.use(cors());
+client.on("message", async (channel, tags, message, self) => {
+  // Ignore echoed messages.
+  // if (self) return;
+  const regex = /^![a-z]{2}/;
 
-io.on("connection", (socket) => {
-  console.log("a user connected");
-
-  clientSocket = socket;
-  console.log(clientSocket);
+  if (regex.test(message.split(" ")[0])) {
+    const translatedText = await generateAnswer(message);
+    client.say(channel, `${translatedText}`);
+  }
 });
-
-app.get("/", (_, res) => res.json({ ok: "app running" }));
-
-app.post("/startConnection", (req, res) => {
-  const { streamerChannelName } = req.body;
-  const client = new tmi.Client({
-    channels: [streamerChannelName],
-  });
-
-  client.connect();
-
-  client.on("message", (channel, tags, message, self) => {
-    console.log(`${tags["display-name"]}: ${message}`);
-    if (channel.split("#")[1] === streamerChannelName) {
-      const newMessage = { username: tags["display-name"], message };
-      if (clientSocket) {
-        clientSocket.emit("newMessage", newMessage); // Emite um evento quando uma nova mensagem é recebida para todos os clientes conectados
-      }
-    }
-  });
-
-  return res.status(200).json({ status: "connected" });
-});
-
-app.use(errorMiddleware);
-
-export default app;
