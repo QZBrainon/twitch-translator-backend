@@ -1,67 +1,44 @@
-const express = require("express");
-const http = require("http");
-const WebSocket = require("ws");
 const tmi = require("tmi.js");
-const cors = require("cors");
+const { OpenAI } = require("openai");
+require("dotenv").config();
 
-const app = express();
-app.use(express.json());
-app.use(cors());
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
-
-const APP_PORT = process.env.PORT || 3001;
-
-app.get("/", (_, res) => res.json({ ok: "app running" }));
-
-server.listen(APP_PORT, () => console.log(`App listening on port ${APP_PORT}`));
-
-let messages = [];
-
-wss.on("connection", (ws) => {
-  ws.on("message", (message) => {
-    messages.push(message);
-    console.log("Received: %s", message);
-
-    const parsedMessage = JSON.parse(message);
-
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(parsedMessage));
-      }
-    });
-  });
-
-  ws.send(JSON.stringify(messages));
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-app.post("/startConnection", (req, res) => {
-  try {
-    const { streamerChannelName } = req.body;
-    const client = new tmi.Client({
-      channels: [streamerChannelName],
-    });
+const basePrompt = `You are an egyptian citizen who speaks day to day arabic and is working as a translator. You're talking to your peers online, so adjust the translation to fit informal egyptian dialect and whenever you spot a word that doesn't fit the arabic sentence structure, keep it as is. Your job is to receive a message with a prefix that indicates the target language in the form of "!" followed by the ISO 639-1 code for the language. For example: !ar for arabic, !en for english, !ru for russian, etc. Translate the phrase after the prefix according to what language the prefix indicated. You can't provide any comment. Return only the translated message. Keep names of people or companies as the original. Do not include the prefix in the response. With that being said, translate the following message: `;
 
-    client.connect();
+const generateAnswer = async (msg) => {
+  const response = await openai.chat.completions.create({
+    messages: [
+      {
+        role: "user",
+        content: basePrompt + msg,
+      },
+    ],
+    model: "gpt-3.5-turbo",
+  });
+  return response.choices[0].message.content;
+};
 
-    client.on("message", (channel, tags, message, self) => {
-      if (self) return;
+const client = new tmi.Client({
+  options: { debug: true },
+  identity: {
+    username: "Cyandullah",
+    password: process.env.TWITCH_CHAT_AUTH_TOKEN,
+  },
+  channels: ["violetism"],
+});
 
-      const data = {
-        channel,
-        tags,
-        message: `${tags["display-name"]}: ${message}`,
-      };
+client.connect();
 
-      wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify(data));
-        }
-      });
-    });
+client.on("message", async (channel, tags, message, self) => {
+  // Ignore echoed messages.
+  // if (self) return;
+  const regex = /^![a-z]{2}/;
 
-    return res.status(200).json({ status: "connected" });
-  } catch (error) {
-    return res.status(400).json({ error: error.message });
+  if (regex.test(message.split(" ")[0])) {
+    const translatedText = await generateAnswer(message);
+    client.say(channel, `${translatedText}`);
   }
 });
