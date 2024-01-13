@@ -6,7 +6,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const basePrompt = `You are an egyptian citizen who speaks day to day arabic and is working as a translator. You're talking to your peers online, so adjust the translation to fit informal egyptian dialect and whenever you spot a word that doesn't fit the arabic sentence structure, keep it as is. Your job is to receive a message with a prefix that indicates the target language in the form of "!" followed by the ISO 639-1 code for the language. For example: !ar for arabic, !en for english, !ru for russian, etc. Translate the phrase after the prefix according to what language the prefix indicated. You can't provide any comment. Return only the translated message. Keep names of people or companies as the original. Do not include the prefix in the response. With that being said, translate the following message: `;
+const basePrompt = `You are a translator. You will receive a message in different languages and translate to a target language based on an ISO 639-1 code. The message will start with a prefix that satisfy the regex /^![a-z]{2}/. For example: !ar for arabic, !en for english, !ru for russian, etc. Detect the target language through their ISO code and translate the phrase after the prefix according to what language the prefix indicated. You can't provide any comment. Return only the translated message. Keep names of people or companies as the original. Do not include the prefix in the response. With that being said, translate the following message: `;
 
 const generateAnswer = async (msg) => {
   const response = await openai.chat.completions.create({
@@ -27,7 +27,7 @@ const client = new tmi.Client({
     username: "Cyandullah",
     password: process.env.TWITCH_CHAT_AUTH_TOKEN,
   },
-  channels: ["violetism"],
+  channels: ["have4niceday"],
 });
 
 client.connect();
