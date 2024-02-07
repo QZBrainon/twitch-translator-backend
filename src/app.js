@@ -24,17 +24,15 @@ const generateAnswer = async (msg) => {
 const client = new tmi.Client({
   options: { debug: true },
   identity: {
-    username: "Cyandullah",
+    username: process.env.TWITCH_CHAT_USERNAME,
     password: process.env.TWITCH_CHAT_AUTH_TOKEN,
   },
-  channels: ["have4niceday"],
+  channels: [process.env.TWITCH_CHANNEL],
 });
 
 client.connect();
 
-client.on("message", async (channel, tags, message, self) => {
-  // Ignore echoed messages.
-  // if (self) return;
+client.on("message", async (channel, _tags, message, _self) => {
   const regex = /^![a-z]{2}/;
 
   if (regex.test(message.split(" ")[0])) {
