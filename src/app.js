@@ -33,7 +33,7 @@ const client = new tmi.Client({
 client.connect();
 
 client.on("message", async (channel, _tags, message, _self) => {
-  const regex = /^![a-z]{2}/;
+  const regex = /^![a-z]{2}$/;
 
   if (regex.test(message.split(" ")[0])) {
     const translatedText = await generateAnswer(message);
